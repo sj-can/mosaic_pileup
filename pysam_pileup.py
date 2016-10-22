@@ -1,4 +1,5 @@
-import pysam, subprocess
+
+import pysam, subprocess, os
 
 def get_tngs_ids(input_file):
         tngs_ids = []
@@ -44,57 +45,64 @@ def only_one_bam(matching_ids):
 		    v.remove(bam_file)
 		    matching_ids[k] = v
 		elif 'rerun' in bam_file:
-		    v = [bam_file]
+		    v = bam_file
 		else:
 		    matching_ids[k] = v[0]
+	if type(v) == str:
+	    matching_ids[k] = [v]
     return matching_ids
 
 #takes key, value as {tngs_id : ['one_bam_file_path']
 def pysam_pileup(tngs_id, bam_file_path):
-    positions = {'A' : [], 'T' : [], 'C' : [], 'G' : []}
+    positions = {'A' : [], 'T' : [], 'C' : [], 'G' : [], 'N' : []}
     samfile = pysam.AlignmentFile(bam_file_path, 'rb')
     total = 0
     for pcolumn in samfile.pileup("MT", 3242, 3243):
         for pread in pcolumn.pileups:
-            #if not pread.is_del and not pread.is_refskip and pcolumn.pos == 3242:
-	    if pcolumn.pos == 3242:
+            if not pread.is_del and not pread.is_refskip and pcolumn.pos == 3242:
 		total += 1
         	#print pcolumn.n
-        	#print pread.query_position
+        	print pread.query_position
     	        #print pcolumn.pos
 	    	read = pread.alignment.query_name
-	    	base = pread.alignment.query_sequence[pread.query_position]
-		#print read, base
+	    	base = pread.alignment.query_sequence[int(pread.query_position)]
+		print type(base)
+		print read, base
 		positions[base].append(read)
 	        #print base + '\t' + read
     positions['total'] = total
     samfile.close()
-    for k, v in positions.iteritems():
-	print k
-	try:
-	    print len(v)
-	except:
-	    print v
-    print
+#    for k, v in positions.iteritems():
+#	print k
+#	try:
+#	    print len(v)
+#	except:
+#	    print v
+    return positions
 
 def starting_file(filename):
-    with open(filename, 'w') as f:
-        f.write('tngs_id' + '\t' + 'A' + '\t' + 'T' + '\t' + 'C' + '\t' 'G' + '\t' + 'Total' + '\t' + 'bam_file_path')
-    return filename
+    new_name = filename.rsplit(".", 1)[0] + "_ac"
+    if not os.path.isfile(new_name):
+        with open(new_name, 'w') as f:
+            f.write('tngs_id' + '\t' + 'A' + '\t' + 'T' + '\t' + 'C' + '\t' 'G' + '\t' + 'Total' + '\t' + 'bam_file_path' + '\n')
+    return new_name
 
-#def append_iteration_to_file(file_name, position_dict):
-
+def append_iteration_to_file(file_name, tngs_id, bam_path, d):
+    with open(file_name, 'a') as ouf:
+	ouf.write(tngs_id +'\t'+ str(len(d['A'])) +'\t'+ str(len(d['T'])) +'\t'+ str(len(d['C'])) +'\t'+ str(len(d['G'])) +'\t'+ str(d['total']) +'\t' + bam_path + '\n')
 
 if __name__ == "__main__":
     b = 'sample_lists/'
     #tngs_id_list = [b +"tngs_id_positive_controls.txt", b + "undiagnosed_controls.txt", b + "assumed_negative_control.txt"]
-    test_list = [tngs_id_positive_controls.txt]
+    test_list = ["tngs_id_positive_controls.txt", "assumed_negative_control.txt"]
     for item in test_list:
 	tngs_ids = get_tngs_ids(item)
         bam_dict = search_bam_list_file(tngs_ids, "tngs_id_bam_paths")
 	one_bam = only_one_bam(bam_dict)
-	starting_file(item)
-#	for k,v in one_bam.iteritems():
-#	    if k == 'v501_1169':
-#		print v[0]
-#		pysam_pileup(str(k), str(v[0]))	    
+	out_file = starting_file(item)
+	for k,v in one_bam.iteritems():
+	    this_bam_pile = pysam_pileup(k, v[0])
+	    append_iteration_to_file(out_file, k, str(v[0]), this_bam_pile)
+	    
+	    
+		
