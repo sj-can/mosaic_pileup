@@ -28,7 +28,7 @@ def sam_to_bam(sam_file, outfile):
 #create a dictionary in the output positions dictionary that contains 'total'
 #return positions dictionary
 def pysam_allele_identifier(sam_file_path):
-    samfile = pysam.AlignmentFile(sam_file_path, 'r')
+    samfile = pysam.AlignmentFile(sam_file_path, 'rb')
     positions = {'A' : [], 'T' : [], 'C' : [], 'G' : [], 'N' : []}
     total = 0
     for pcolumn in samfile.pileup("MT", 3242, 3243):
@@ -40,6 +40,8 @@ def pysam_allele_identifier(sam_file_path):
     positions['total'] = total
     samfile.close()
     return positions
+
+
 
 #function to handle logic of more or less mutants required and pass appropriate arguments to the 
 #mutator function
@@ -113,7 +115,7 @@ def add_mutants_to_sam(sequences_to_substitute, mutant_name, MT_sam):
 		#else:
 		#    other_array.append(line)
 	    if inf_key not in sequences_to_substitute.keys():
-		ouf.write('\t'.join(map(str,spl)))
+		ouf.write(line)
 		non_match_array.append(inf_key)
     print len(match_array)
     print len(non_match_array)
@@ -129,9 +131,17 @@ if __name__ == '__main__':
     #bam_to_sam = bam_to_sam("v501_1169_FEMALE.realigned.bam", "v501_1169_FEMALE.realigned.sam")
     #externally remove target reads using bam_to_MTsam output and picard. Use FilterSamReads from picard using a headerless desired MT regions fil
 
-    target_reads = pysam_allele_identifier("v501_1169_FEMALE.realigned.bam")
-    mutate_reads = pysam_pileup("v501_1169_FEMALE.realigned.bam", "10_v501_1169_FEMALE.realigned.MT.sam", 10, target_reads, ref='A', alt='G')
-    add_mutants_to_sam(mutate_reads[0], mutate_reads[1], "v501_1169_FEMALE.realigned.MT3243.sam")
+    #target_reads = pysam_allele_identifier("v501_1169_FEMALE.realigned.bam")
+    #mutate_reads = pysam_pileup("v501_1169_FEMALE.realigned.bam", "10_v501_1169_FEMALE.realigned.MT.sam", 10, target_reads, ref='A', alt='G')
+    #add_mutants_to_sam(mutate_reads[0], mutate_reads[1], "v501_1169_FEMALE.realigned.MT3243.sam")
+
+    #sam_to_bam("NO_MT3243_v501_1169_FEMALE.sam", "10_MT3243_v501_1169_FEMALE.bam")
+    mutated_bam = pysam_allele_identifier("10_MT3243_v501_1169_FEMALE.sorted.bam")
+    for k,v in mutated_bam.iteritems():
+	try:
+	    print k, len(v)
+	except:
+	    print k, v
 
     #this tests that the target reads have been removed 
     #sam_to_bam("NO_MT3243_v501_1169_FEMALE.sam", "NO_MT3243_v501_1169_FEMALE.bam")
