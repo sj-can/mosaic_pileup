@@ -41,19 +41,17 @@ def pysam_allele_identifier(sam_file_path):
     samfile.close()
     return positions
 
-
-
 #function to handle logic of more or less mutants required and pass appropriate arguments to the 
 #mutator function
 def pysam_pileup(bam_file_path, mutant_name, mosaic, positions, ref=None, alt=None):
     total = positions['total']
     print 'total = ' + str(total)
     print 'mosacisism level required = ' + str(mosaic) + '%'
-    number_alts_needed = total/100 * mosaic
+    number_alts_needed = (total/100) * mosaic
     print 'number ALT allele needed = ' + str(number_alts_needed)
     if alt:
         print 'number ALT present = ' + str(len(positions[alt]))
-        mosaic_dict = { "number_alts_needed" : total/mosaic, "number_alts_have" : len(positions[alt]), "mosic_level" : mosaic}
+        mosaic_dict = { "number_alts_needed" : number_alts_needed, "number_alts_have" : len(positions[alt]), "mosic_level" : mosaic}
         print mosaic_dict
     if number_alts_needed < len(positions[alt]):
         print 'you need a lower level of moscaicism than is in this sample!'
@@ -61,7 +59,7 @@ def pysam_pileup(bam_file_path, mutant_name, mosaic, positions, ref=None, alt=No
             print 'you must include reference and alternative alleles to continue'
         elif ref and alt:
             mutants = mutator(bam_file_path, mutant_name, mosaic_dict, positions, ref, alt, higher=True)
-	    #print 'mutator_activated'
+	    print 'mutator_activated'
     elif number_alts_needed > len(positions[alt]):
         print 'you need a higher level of moscaicism!'
     return mutants
@@ -75,6 +73,7 @@ def mutator(bam_file_path, mutant_name, mosaic_dict, positions, ref=None, alt=No
     samfile = pysam.AlignmentFile(bam_file_path, 'rb')
     #{integer_AATTCCGG_read_id :  mutated_sequence]}
     sequences_to_substitute = {}
+    duplicate_keys = {}
     if higher:
         decrease_by = mosaic_dict["number_alts_have"] - mosaic_dict["number_alts_needed"]
 	print 'you need to decrease by ' + str(decrease_by)
@@ -90,16 +89,21 @@ def mutator(bam_file_path, mutant_name, mosaic_dict, positions, ref=None, alt=No
 			altered_sequence = ''.join(altered_list)
 			#{integer_AATTCCGG_read_id :  mutated_sequence]}
 			key = pread.alignment.query_sequence +'_'+ pread.alignment.query_name
-			sequences_to_substitute[key] = altered_sequence
-			alt_to_ref_count += 1
+			if key in sequences_to_substitute.keys():
+			    duplicate_keys[key] = altered_sequence
+			    alt_to_ref_count += 1
+			elif key not in sequences_to_substitute.keys():
+			    sequences_to_substitute[key] = altered_sequence
+			    alt_to_ref_count += 1
     samfile.close()
-    return [sequences_to_substitute, mutant_name]
+    return [sequences_to_substitute, mutant_name, duplicate_keys]
 
 #add mutant sequences to sam file adding the integer_unmutated_sequence_sequence_id to an array to ensure all are accounted for
-def add_mutants_to_sam(sequences_to_substitute, mutant_name, MT_sam):
+def add_mutants_to_sam(sequences_to_substitute, mutant_name, MT_sam, duplicate_sequences_to_subs):
     match_array = []
     non_match_array = []
-    other_array = []
+    other_match_array = []
+    print len(duplicate_sequences_to_subs)
     with open(MT_sam, 'r') as inf, open(mutant_name, 'w') as ouf:
         for line in inf:
             spl = line.split('\t')
@@ -109,15 +113,16 @@ def add_mutants_to_sam(sequences_to_substitute, mutant_name, MT_sam):
 		    spl[9] = v
 		    ouf.write('\t'.join(map(str,spl)))
 		    match_array.append(k)
-		#elif inf_key != k and inf_key not in non_match_array:
-		#    ouf.write('\t'.join(map(str,spl)))
-		#    non_match_array.append(inf_key)
-		#else:
-		#    other_array.append(line)
+	    for k,v in duplicate_sequences_to_subs.iteritems():
+		if inf_key == k and k not in other_match_array:
+		    spl[9] = v
+		    ouf.write('\t'.join(map(str,spl)))
+		    other_match_array.append(k)
 	    if inf_key not in sequences_to_substitute.keys():
 		ouf.write(line)
 		non_match_array.append(inf_key)
     print len(match_array)
+    print len(other_match_array)
     print len(non_match_array)
 
 #append the large headerless sam file to the mutated reads
@@ -136,15 +141,38 @@ if __name__ == '__main__':
     #add_mutants_to_sam(mutate_reads[0], mutate_reads[1], "v501_1169_FEMALE.realigned.MT3243.sam")
 
     #sam_to_bam("NO_MT3243_v501_1169_FEMALE.sam", "10_MT3243_v501_1169_FEMALE.bam")
-    mutated_bam = pysam_allele_identifier("10_MT3243_v501_1169_FEMALE.sorted.bam")
-    for k,v in mutated_bam.iteritems():
-	try:
-	    print k, len(v)
-	except:
-	    print k, v
+    #mutated_bam = pysam_allele_identifier("10_MT3243_v501_1169_FEMALE.sorted.bam")
+    #for k,v in mutated_bam.iteritems():
+#	try:
+#	    print k, len(v)
+#	except:
+#	    print k, v
 
     #this tests that the target reads have been removed 
     #sam_to_bam("NO_MT3243_v501_1169_FEMALE.sam", "NO_MT3243_v501_1169_FEMALE.bam")
-    #positions = pysam_allele_identifier("NO_MT3243_v501_1169_FEMALE.bam")
-    #for k,v in positions.iteritems():
-    #	print k, len(v)
+    
+    positions = pysam_allele_identifier("/mnt/Data4/working_directory/stuart/python-2-7-10/scripts/mitochondial_sensitivity/mutated_files/10_MT3243_v501_1169_FEMALE.sorted.bam")
+    for k,v in positions.iteritems():
+	try:
+    	    print k, len(v)
+	except:
+	    print k, v
+
+   #create samfile with only reads that map to m3243 (A)
+   #create sam file with all reads and header
+   #create sam file subrtacting the reads that map to m3243 using picard FilterSamReads and headerless (A) as readfile (B)
+   #pull out target reads using a pileup
+   #mutate the reads depending on required level of mosaicism - first n are mutated
+   #append mutated read to sam file (B)
+   #convert sam_file(B) back to bam format
+   #sort mutated bam by coordinate
+
+
+   #----------create 5% 
+   #target_reads = pysam_allele_identifier("v501_1169_FEMALE.realigned.bam")
+   #mutate_reads = pysam_pileup("v501_1169_FEMALE.realigned.bam", "05_v501_1169_FEMALE.realigned.MT.sam", 5, target_reads, ref='A', alt='G') 
+   #add_mutants_to_sam(mutate_reads[0], mutate_reads[1], "v501_1169_FEMALE.realigned.MT3243.sam", mutate_reads[2])
+   #sam_to_bam("05_v501_1169_FEMALE.realigned.sam", "05_v501_1169_FEMALE.realigned.bam")
+
+   #check for duplicate
+   #bam_to_MTsam("v501_1169_FEMALE.realigned.bam", "outfile")
